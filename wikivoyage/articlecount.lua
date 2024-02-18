@@ -11,21 +11,13 @@ local p = {}
 
 -- --------------------------------  SETUP VARIABLES ------------------------------------
 
--- Articoli "Destinazioni" per tipo
-local destinations = { "Distretto", "Città", "Regione nazionale", "Regione continentale",
-	"Stato", "Continente", "Parco", "Monte", "Sito archeologico", "Massa d'acqua" }
+-- Setup variables
+local destinations = {"Distretto", "Città", "Regione nazionale", "Regione continentale", "Stato", "Continente", "Parco", "Monte", "Sito archeologico", "Massa d'acqua"}
 local thematicArticleType = {"Aeroporto", "Frasario", "Itinerario", "Sentiero", "Tematica"}
-local servicePages = {"Patrimoni Mondiali dell'Umanità", "Portali", "Disambigue"}
+local levels = {'Abbozzi', 'Articoli usabili', 'Guide', 'Articoli in vetrina', 'Articoli senza livello'}
 
--- Livelli articolo
-local levels =  {'Abbozzi', 'Articoli usabili', 'Guide', 'Articoli in vetrina', 'Articoli senza livello'}
 
 -- --------------------------------  AUX FUNCTIONS ------------------------------------
-
-local function is_defined(s)
-	if s and s ~= '' then return s end
-	return nil
-end
 
 local function _categoryExists(catName)
     local title = mw.title.new('Category:' .. catName)
@@ -33,95 +25,95 @@ local function _categoryExists(catName)
 end
 
 local function getCategoryCount(categoryName, flag)
-	local flag = flag or 'pages'
-    return mw.site.stats.pagesInCategory(categoryName, flag)
+    return mw.site.stats.pagesInCategory(categoryName, flag or 'pages')
 end
+
 
 -- --------------------------------  CALC SUM AND ARTICLE COUNTS ------------------------------------
 
 
 -- ----------- TOTALS AND SUBTOTALS -------------------------
 
-local function calc_summary(articleTypes, level)
+local function calcSummary(articleTypes, level)
     local sum = 0
     for _, articleType in ipairs(articleTypes) do
-        local catName = articleType .. (level and (" - " .. level) or "")
+        local catName = articleType .. (level and " - " .. level or "")
         if _categoryExists(catName) then
-        	sum = sum + getCategoryCount(catName, 'pages')
+            sum = sum + getCategoryCount(catName, "pages")
         end
     end
     return sum
 end
 
 function p.totalDestinations()
-    local sum = calc_summary(destinations, nil) -- all levels
+    local sum = calcSummary(destinations,nil) -- all levels
     return mw.language.getContentLanguage():formatNum(sum)
 end
 
 function p.totalDestinationsByType(frame)
+    local level = frame.args[1]
+	if not level or level == '' then
+        error("Per il calcolo delle somme per livello è necessario inserire il parametro con il livello desiderato.")
+    end
 
-	if not is_defined(frame.args[1]) then
-		error("Per il calcolo delle somme per livello è necessario inserire il parametro con il livello desiderato")
-	end
-
-	local level = frame.args[1]
-    local sum = calc_summary(destinations,level)
+    local sum = calcSummary(destinations,level)
     return mw.language.getContentLanguage():formatNum(sum)
 end
 
 
 function p.totalThematicArticles()
-
-    local sum = calc_summary(thematicArticleType,nil)
-
     -- Handling Frasari e Tematiche (purtroppo il nome delle categorie non è consistente qui
     -- Per i livelli abbiamo come dapertutto "Tematica - Abbozzi",  "Tematica - Guide"...
     -- ma per la categoria generale i nomi sono "Frasari" e "Tematiche turistiche"
-    sum = sum + getCategoryCount("Frasari", "pages")
-    sum = sum + getCategoryCount("Tematiche turistiche", "pages")
+    local sum = calcSummary(thematicArticleType,nil) +
+                getCategoryCount("Frasari", "pages") +
+                getCategoryCount("Tematiche turistiche", "pages")
 
     return mw.language.getContentLanguage():formatNum(sum)
 end
 
 function p.totalThematicArticlesByType(frame)
 
-	if not is_defined(frame.args[1]) then
-		error("Per il calcolo delle somme per livello è necessario inserire il parametro con il livello desiderato")
-	end
-
-    local level = frame.args[1]
-    local sum = calc_summary(thematicArticleType,level)
+	local level = frame.args[1]
+	if not level or level == '' then
+        error("Per il calcolo delle somme per livello è necessario inserire il parametro con il livello desiderato.")
+    end
+    local sum = calcSummary(thematicArticleType,level)
+    mw.log(sum)
     return mw.language.getContentLanguage():formatNum(sum)
 end
 
 -- ----------- PERCENTAGES FOR THE COLORED BARS -------------------------
 
 function p.percentagePerArticleType(frame)
-	local args = frame.args
-	local articleType = args["type"]
-	local level = args["level"]
-	local parentCat = args["parentCat"] or articleType -- per i casi in cui la categoria senza livello differisca nel nome da quelle con i livelli
+	local articleType = frame.args["type"]
+    local level = frame.args["level"]
+    local parentCat = frame.args["parentCat"] or articleType -- per i casi in cui la categoria senza livello differisca nel nome da quelle con i livelli
+    local percentage = "0"
 
-	if not is_defined(level) or not is_defined(articleType) then
-		error("Controlla i parametri nella chiamata a percentagePerArticleType")
-	end
+	if not level or not articleType or level == '' or articleType == '' then
+        error("I parametri 'type' e 'level' sono obbligatori.")
+        return percentage
+    end
+
+    if not _categoryExists(parentCat) then
+        error("La categoria " .. parentCat .. " non esiste.")
+        return percentage
+    end
 
 	local total = getCategoryCount(parentCat, "pages")
     local catName = articleType .. " - " .. level
     if _categoryExists(catName) then
     	local count = getCategoryCount(catName,"pages")
         local percentage = count/total*100
-        return string.format("%.3f", percentage)
-    else
-    	return 0
+        percentage = string.format("%.3f", percentage)
     end
 
+    return percentage
 end
 
 return p
 
-
-
 --Debugging:
---         =p.totalThematicArticlesByType(mw.getCurrentFrame():newChild{title="Module:CountArticles",args={}})
---         =p.percentagePerArticleType(mw.getCurrentFrame():newChild{title="Module:CountArticles",args={type="Città", level="Abbozzi"}})
+--         =p.totalThematicArticlesByType(mw.getCurrentFrame():newChild{title="Module:StatsArticoli",args={}})
+--         =p.percentagePerArticleType(mw.getCurrentFrame():newChild{title="Module:StatsArticoli",args={type="Città", level="Abbozzi"}})
