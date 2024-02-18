@@ -1,3 +1,12 @@
+--[[
+	Module to avoid too long concatentaions of {{PAGESINCATEGORY}}, #expr and formatnum in the
+	table summarizing the articles and their levels in Wikivoyage.
+	Maintainers:		User:Nastoshka
+	Version:			1.0.0
+	Last updated:		2024-02-17
+]]
+
+
 local p = {}
 
 -- --------------------------------  SETUP VARIABLES ------------------------------------
@@ -32,15 +41,20 @@ end
 
 
 -- ----------- TOTALS AND SUBTOTALS -------------------------
-function p.totalDestinations()
-    local sum = 0
 
-    for _, articleType in ipairs(destinations) do
-        if _categoryExists(articleType) then
-        	sum = sum + getCategoryCount(articleType)
+local function calc_summary(articleTypes, level)
+    local sum = 0
+    for _, articleType in ipairs(articleTypes) do
+        local catName = articleType .. (level and (" - " .. level) or "")
+        if _categoryExists(catName) then
+        	sum = sum + getCategoryCount(catName, 'pages')
         end
     end
+    return sum
+end
 
+function p.totalDestinations()
+    local sum = calc_summary(destinations, nil) -- all levels
     return mw.language.getContentLanguage():formatNum(sum)
 end
 
@@ -51,33 +65,20 @@ function p.totalDestinationsByType(frame)
 	end
 
 	local level = frame.args[1]
-    local sum = 0
-
-    for _, articleType in ipairs(destinations) do
-    	local catName = articleType .. " - " .. level
-        if _categoryExists(catName) then
-        	sum = sum + getCategoryCount(catName)
-        end
-    end
-
+    local sum = calc_summary(destinations,level)
     return mw.language.getContentLanguage():formatNum(sum)
 end
 
 
 function p.totalThematicArticles()
-    local sum = 0
 
-    for _, articleType in ipairs(thematicArticleType) do
-        if _categoryExists(articleType) then
-        	sum = sum + getCategoryCount(articleType)
-        end
-    end
+    local sum = calc_summary(thematicArticleType,nil)
 
     -- Handling Frasari e Tematiche (purtroppo il nome delle categorie non è consistente qui
     -- Per i livelli abbiamo come dapertutto "Tematica - Abbozzi",  "Tematica - Guide"...
     -- ma per la categoria generale i nomi sono "Frasari" e "Tematiche turistiche"
-    sum = sum + getCategoryCount("Frasari")
-    sum = sum + getCategoryCount("Tematiche turistiche")
+    sum = sum + getCategoryCount("Frasari", "pages")
+    sum = sum + getCategoryCount("Tematiche turistiche", "pages")
 
     return mw.language.getContentLanguage():formatNum(sum)
 end
@@ -88,16 +89,8 @@ function p.totalThematicArticlesByType(frame)
 		error("Per il calcolo delle somme per livello è necessario inserire il parametro con il livello desiderato")
 	end
 
-	local level = frame.args[1]
-    local sum = 0
-
-    for _, articleType in ipairs(thematicArticleType) do
-    	local catName = articleType .. " - " .. level
-        if _categoryExists(catName) then
-        	sum = sum + getCategoryCount(catName)
-        end
-    end
-
+    local level = frame.args[1]
+    local sum = calc_summary(thematicArticleType,level)
     return mw.language.getContentLanguage():formatNum(sum)
 end
 
@@ -118,7 +111,7 @@ function p.percentagePerArticleType(frame)
     if _categoryExists(catName) then
     	local count = getCategoryCount(catName,"pages")
         local percentage = count/total*100
-        return math.floor(percentage)
+        return string.format("%.3f", percentage)
     else
     	return 0
     end
@@ -126,3 +119,9 @@ function p.percentagePerArticleType(frame)
 end
 
 return p
+
+
+
+--Debugging:
+--         =p.totalThematicArticlesByType(mw.getCurrentFrame():newChild{title="Module:CountArticles",args={}})
+--         =p.percentagePerArticleType(mw.getCurrentFrame():newChild{title="Module:CountArticles",args={type="Città", level="Abbozzi"}})
